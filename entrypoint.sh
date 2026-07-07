@@ -1,10 +1,29 @@
 #!/bin/sh
-# Runs as root so we can fix ownership of a freshly-mounted persistent disk
-# (Render mounts new disks root-owned) before dropping to the non-root app user.
-dir="$HOME/.nanobot"
-mkdir -p "$dir"
-chown -R nanobot:nanobot "$dir"
+# Prepares the (possibly root-owned, freshly-mounted) data disk and runs the app
+# as the non-root nanobot user when the platform allows it, falling back to root
+# only when privilege-dropping is not permitted. Logs each decision so a failed
+# start is diagnosable in the platform's logs instead of a silent exit.
+echo "[entrypoint] starting as $(id)"
 
-# Drop privileges to the non-root user and exec the app as PID 1 so signals
-# (SIGTERM / graceful shutdown) reach it directly.
-exec setpriv --reuid=nanobot --regid=nanobot --init-groups nanobot "$@"
+dir="$HOME/.nanobot"
+mkdir -p "$dir" 2>&1 || echo "[entrypoint] warning: mkdir $dir failed"
+
+if [ "$(id -u)" != "0" ]; then
+    # Already non-root (platform forced a user). Can't chown; just run.
+    echo "[entrypoint] not root — running app as $(id -un 2>/dev/null || id -u)"
+    exec nanobot "$@"
+fi
+
+# Running as root: make the mounted disk writable by the app user.
+chown -R nanobot:nanobot "$dir" 2>&1 || echo "[entrypoint] warning: chown $dir failed"
+
+# Drop to the non-root user if the runtime grants the capability to do so
+# (setpriv needs CAP_SETUID/CAP_SETGID). Otherwise stay root so the app can
+# still write the root-owned disk.
+if setpriv --reuid=nanobot --regid=nanobot --init-groups true 2>/dev/null; then
+    echo "[entrypoint] dropping privileges to nanobot via setpriv"
+    exec setpriv --reuid=nanobot --regid=nanobot --init-groups nanobot "$@"
+fi
+
+echo "[entrypoint] setpriv privilege-drop not permitted — running app as root"
+exec nanobot "$@"
