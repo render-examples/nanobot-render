@@ -8,9 +8,11 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    # entrypoint.sh execs `nanobot "$@"`, so this becomes:
-    #   nanobot gateway --config /app/render-config.json
-    dockerCommand: gateway --config /app/render-config.json
+    # Render's Docker Command REPLACES the Dockerfile ENTRYPOINT (it is not
+    # appended to it), so invoke the entrypoint explicitly. The entrypoint
+    # prepares the mounted disk, drops to the non-root user when permitted, then
+    # execs `nanobot gateway --config /app/render-config.json`.
+    dockerCommand: /usr/local/bin/entrypoint.sh gateway --config /app/render-config.json
     plan: starter
     healthCheckPath: /
     envVars:
