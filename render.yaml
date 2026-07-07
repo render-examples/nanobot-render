@@ -1,0 +1,34 @@
+# Render Blueprint — deploys nanobot's gateway + bundled WebUI as one web service.
+# Secrets are provided at deploy time as env vars (sync: false) and resolved at
+# runtime via the ${VAR} placeholders in render-config.json. Nothing secret is
+# stored in this repo.
+services:
+  - type: web
+    name: nanobot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # entrypoint.sh execs `nanobot "$@"`, so this becomes:
+    #   nanobot gateway --config /app/render-config.json
+    dockerCommand: gateway --config /app/render-config.json
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      # Anthropic API key — powers the agent's LLM calls. Get one at
+      # https://console.anthropic.com/settings/keys
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # WebUI access secret — the gate for the public WebUI. Generate a strong
+      # random value (e.g. `openssl rand -hex 32`) and keep it private.
+      - key: NANOBOT_WEB_TOKEN
+        sync: false
+      # Port Render routes public traffic to; matches channels.websocket.port
+      # in render-config.json.
+      - key: PORT
+        value: 8765
+    # Persist sessions / memory across deploys. Config lives in /app (code dir),
+    # so this mount does not shadow it.
+    disk:
+      name: nanobot-data
+      mountPath: /home/nanobot/.nanobot
+      sizeGB: 1

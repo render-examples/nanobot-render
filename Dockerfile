@@ -27,6 +27,11 @@ COPY nanobot/ nanobot/
 COPY --from=webui-builder /app/nanobot/web/dist/ nanobot/web/dist/
 RUN NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install --system --no-cache ".[whatsapp]"
 
+# Render deploy template: committed gateway config that wires secrets through
+# ${ANTHROPIC_API_KEY} / ${NANOBOT_WEB_TOKEN} env vars (resolved at startup).
+# Lives in the code dir (/app), not the data dir, so a mounted disk won't shadow it.
+COPY render-config.json ./
+
 # Create non-root user and config directory
 RUN useradd -m -u 1000 -s /bin/bash nanobot && \
     mkdir -p /home/nanobot/.nanobot && \
