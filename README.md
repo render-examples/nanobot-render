@@ -8,12 +8,15 @@ Deploy [nanobot](https://github.com/HKUDS/nanobot) — a lightweight, self-hosta
 
 One Render web service running nanobot's `gateway` and its bundled WebUI. You chat with the agent from your browser; it can use tools (web search/fetch, filesystem, shell, MCP servers) and remembers past sessions on a persistent disk. Access is gated by a secret you set.
 
-## Deploy
+## Cost expectations
 
-> **Before you start:** this Blueprint runs on Render's **Starter** plan (~$7/mo) plus a 1 GB
-> persistent disk (~$0.25/mo) — it is not a free deploy. You'll also need an
-> [Anthropic API key](https://console.anthropic.com/settings/keys), which is billed separately by
-> Anthropic based on usage.
+This is not a free deploy. Expect:
+
+- **Render Starter plan** — ~$7/mo for the web service.
+- **1 GB persistent disk** — ~$0.25/mo for sessions and memory.
+- **Anthropic API usage** — billed separately by Anthropic based on your agent's LLM calls.
+
+## Deploy
 
 1. **Generate a `NANOBOT_WEB_TOKEN`** — this is the access secret for your WebUI. Create a strong random value with one of:
 
