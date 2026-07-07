@@ -1,7 +1,7 @@
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-opus-4-5",
+      "model": "anthropic/claude-opus-4-8",
       "provider": "auto"
     }
   },
