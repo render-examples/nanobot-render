@@ -10,11 +10,20 @@ One Render web service running nanobot's `gateway` and its bundled WebUI. You ch
 
 ## Deploy
 
-1. Click **Deploy to Render** above (or create a new Blueprint from your fork of this repo).
-2. Render reads [`render.yaml`](./render.yaml) and prompts for two environment variables (below).
-3. Wait for the service to reach **Live**, then open its `onrender.com` URL.
-4. The WebUI shows an access prompt — paste your `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
-5. Send a message. You're talking to your agent.
+1. **Generate a `NANOBOT_WEB_TOKEN`** — this is the access secret for your WebUI. Create a strong random value with one of:
+
+   ```bash
+   openssl rand -hex 32
+   # or, if you don't have openssl:
+   python3 -c "import secrets; print(secrets.token_hex(32))"
+   ```
+
+   Copy the output — you'll paste it in step 3, and again when you first open the WebUI.
+2. Click **Deploy to Render** above (or create a new Blueprint from your fork of this repo). Render reads [`render.yaml`](./render.yaml) and prompts for the environment variables below.
+3. Enter your `ANTHROPIC_API_KEY` and the `NANOBOT_WEB_TOKEN` you generated, then **Apply**.
+4. Wait for the service to reach **Live**, then open its `onrender.com` URL.
+5. The WebUI shows an access prompt — paste the same `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
+6. Send a message. You're talking to your agent.
 
 ## Environment variables
 
@@ -23,7 +32,7 @@ Render prompts for these on deploy (both are `sync: false`, so no secret is ever
 | Variable | What it's for | Where to get it |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Powers the agent's LLM calls (default model `anthropic/claude-opus-4-5`). | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| `NANOBOT_WEB_TOKEN` | The access secret for the WebUI — the only gate on your public agent. | Generate a strong random value, e.g. `openssl rand -hex 32`. |
+| `NANOBOT_WEB_TOKEN` | The access secret for the WebUI — the only gate on your public agent. | Generate it yourself (see step 1 above): `openssl rand -hex 32` or `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 
 `PORT` is set for you in the Blueprint. Configuration lives in [`render-config.json`](./render-config.json); the two secrets are referenced there as `${ANTHROPIC_API_KEY}` and `${NANOBOT_WEB_TOKEN}` and resolved at startup.
 
