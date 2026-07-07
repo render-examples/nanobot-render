@@ -1,15 +1,10 @@
 #!/bin/sh
+# Runs as root so we can fix ownership of a freshly-mounted persistent disk
+# (Render mounts new disks root-owned) before dropping to the non-root app user.
 dir="$HOME/.nanobot"
-if [ -d "$dir" ] && [ ! -w "$dir" ]; then
-    owner_uid=$(stat -c %u "$dir" 2>/dev/null || stat -f %u "$dir" 2>/dev/null)
-    cat >&2 <<EOF
-Error: $dir is not writable (owned by UID $owner_uid, running as UID $(id -u)).
+mkdir -p "$dir"
+chown -R nanobot:nanobot "$dir"
 
-Fix (pick one):
-  Host:   sudo chown -R 1000:1000 ~/.nanobot
-  Docker: docker run --user \$(id -u):\$(id -g) ...
-  Podman: podman run --userns=keep-id ...
-EOF
-    exit 1
-fi
-exec nanobot "$@"
+# Drop privileges to the non-root user and exec the app as PID 1 so signals
+# (SIGTERM / graceful shutdown) reach it directly.
+exec setpriv --reuid=nanobot --regid=nanobot --init-groups nanobot "$@"
