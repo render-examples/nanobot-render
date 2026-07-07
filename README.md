@@ -10,6 +10,11 @@ One Render web service running nanobot's `gateway` and its bundled WebUI. You ch
 
 ## Deploy
 
+> **Before you start:** this Blueprint runs on Render's **Starter** plan (~$7/mo) plus a 1 GB
+> persistent disk (~$0.25/mo) — it is not a free deploy. You'll also need an
+> [Anthropic API key](https://console.anthropic.com/settings/keys), which is billed separately by
+> Anthropic based on usage.
+
 1. **Generate a `NANOBOT_WEB_TOKEN`** — this is the access secret for your WebUI. Create a strong random value with one of:
 
    ```bash
@@ -31,7 +36,7 @@ Render prompts for these on deploy (both are `sync: false`, so no secret is ever
 
 | Variable | What it's for | Where to get it |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Powers the agent's LLM calls (default model `anthropic/claude-opus-4-5`). | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| `ANTHROPIC_API_KEY` | Powers the agent's LLM calls (default model `anthropic/claude-opus-4-8`). | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | `NANOBOT_WEB_TOKEN` | The access secret for the WebUI — the only gate on your public agent. | Generate it yourself (see step 1 above): `openssl rand -hex 32` or `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 
 `PORT` is set for you in the Blueprint. Configuration lives in [`render-config.json`](./render-config.json); the two secrets are referenced there as `${ANTHROPIC_API_KEY}` and `${NANOBOT_WEB_TOKEN}` and resolved at startup.
@@ -49,6 +54,27 @@ A deployed nanobot is a capable agent: anyone who gets past `NANOBOT_WEB_TOKEN` 
 Edit [`render-config.json`](./render-config.json) to change the model, provider, enabled tools, or channels, then redeploy. To use a different provider (OpenAI, etc.), swap the `providers` block and the model, and add the matching key to `render.yaml` as a `sync: false` env var.
 
 For everything nanobot can do — chat channels (Telegram, Discord, Slack, …), MCP, skills, memory — see the upstream project: **[HKUDS/nanobot](https://github.com/HKUDS/nanobot)** and its [docs](https://nanobot.wiki).
+
+## Troubleshooting
+
+Logs live in the Render dashboard → your service → **Logs**. Start there for any failure.
+
+- **Deploy fails or the service won't go Live.** The most common cause is a missing or mistyped `ANTHROPIC_API_KEY`. Check it under the service's **Environment** tab, then trigger a redeploy. The logs also print `[entrypoint] …` lines showing how the container started.
+- **Can't sign in to the WebUI.** The token prompt expects the exact `NANOBOT_WEB_TOKEN` you set on deploy — paste it verbatim (no surrounding spaces). If you've lost it, set a new value under **Environment**, redeploy, and sign in with the new one.
+- **Chat connects but the agent doesn't respond.** Usually an Anthropic-side issue — an invalid key or exhausted credit. The logs will show the provider error.
+
+## Updating from upstream
+
+This repo is a fork of [HKUDS/nanobot](https://github.com/HKUDS/nanobot). To pull in new nanobot releases:
+
+```bash
+git remote add upstream https://github.com/HKUDS/nanobot.git   # once
+git fetch upstream
+git merge upstream/main
+git push                                                       # your fork
+```
+
+Render auto-deploys the new commit. If you ever re-sync the Blueprint, confirm the service's **Docker Command** still routes through `/usr/local/bin/entrypoint.sh` — it's defined in [`render.yaml`](./render.yaml), so a clean sync preserves it.
 
 ---
 

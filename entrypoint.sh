@@ -6,16 +6,16 @@
 echo "[entrypoint] starting as $(id)"
 
 dir="$HOME/.nanobot"
-mkdir -p "$dir" 2>&1 || echo "[entrypoint] warning: mkdir $dir failed"
+mkdir -p "$dir" || echo "[entrypoint] warning: mkdir $dir failed"
 
 if [ "$(id -u)" != "0" ]; then
     # Already non-root (platform forced a user). Can't chown; just run.
-    echo "[entrypoint] not root — running app as $(id -un 2>/dev/null || id -u)"
+    echo "[entrypoint] not root — running app as $(id -un)"
     exec nanobot "$@"
 fi
 
 # Running as root: make the mounted disk writable by the app user.
-chown -R nanobot:nanobot "$dir" 2>&1 || echo "[entrypoint] warning: chown $dir failed"
+chown -R nanobot:nanobot "$dir" || echo "[entrypoint] warning: chown $dir failed"
 
 # Drop to the non-root user if the runtime grants the capability to do so
 # (setpriv needs CAP_SETUID/CAP_SETGID). Otherwise stay root so the app can
