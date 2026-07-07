@@ -40,8 +40,13 @@ RUN useradd -m -u 1000 -s /bin/bash nanobot && \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
-USER nanobot
+# Start as root so the entrypoint can chown the freshly-mounted (root-owned)
+# Render disk, then it drops to the non-root nanobot user via setpriv.
+USER root
 ENV HOME=/home/nanobot
+# Ensure crash output reaches Render logs (app output is otherwise swallowed on
+# non-graceful exit). Baked in so it survives Blueprint syncs.
+ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
 
 # Gateway health endpoint and optional WebUI/WebSocket channel ports
 EXPOSE 18790 8765
