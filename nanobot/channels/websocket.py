@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import os
 import re
 import ssl
+import time
 import uuid
+from collections import deque
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
@@ -62,6 +65,60 @@ from nanobot.webui.websocket_logging import websockets_server_logger
 # Plain HTTP WebUI routes also run through websockets.process_request.
 _WEBUI_HTTP_OPEN_TIMEOUT_S = 360.0
 
+# Demo abuse controls, applied only in demo mode. Set an env var to 0 to
+# disable that dimension; an unset, negative, or unparseable value falls back
+# to the default below.
+_DEMO_RATE_LIMIT_PER_MINUTE_DEFAULT = 10
+_DEMO_MAX_MESSAGES_PER_SESSION_DEFAULT = 30
+_DEMO_LIMIT_MESSAGE = "Demo limit reached — deploy your own nanobot to keep chatting."
+
+
+def _demo_env_int(name: str, default: int) -> int:
+    """Read a non-negative int env var; fall back to *default* if unset/invalid."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)  # int() tolerates surrounding whitespace, rejects ""
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+class _DemoLimiter:
+    """Per-connection token-bucket rate limit + per-session message cap.
+
+    Each demo WebSocket connection owns its own session, so the per-session
+    cap is enforced per connection. A limit <= 0 disables that dimension.
+    """
+
+    def __init__(
+        self,
+        rate_per_minute: int,
+        max_per_session: int,
+        *,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._rate = max(0, rate_per_minute)
+        self._max = max(0, max_per_session)
+        self._now = now
+        self._events: deque[float] = deque()
+        self._count = 0
+
+    def check(self) -> bool:
+        """Return True if a message is allowed (and consume one); False if capped."""
+        if self._max and self._count >= self._max:
+            return False
+        if self._rate:
+            now = self._now()
+            while self._events and now - self._events[0] >= 60.0:
+                self._events.popleft()
+            if len(self._events) >= self._rate:
+                return False
+            self._events.append(now)
+        self._count += 1
+        return True
+
 
 class WebSocketConfig(Base):
     """WebSocket server channel configuration.
@@ -86,6 +143,12 @@ class WebSocketConfig(Base):
     enabled: bool = True
     host: str = "127.0.0.1"
     port: int = 8765
+    # Demo mode: hosted, unauthenticated, locked-down chat. When True the HTTP
+    # bootstrap skips the secret/localhost gate (it still mints a short-lived WS
+    # token) and 0.0.0.0 binding is allowed without a static token. Forks leave
+    # this False and keep full auth. Pair with a locked-down tools config and
+    # the DEMO_* rate/session caps.
+    demo: bool = False
     unix_socket_path: str = ""
     path: str = "/"
     token: str = ""
@@ -146,6 +209,10 @@ class WebSocketConfig(Base):
     @model_validator(mode="after")
     def wildcard_host_requires_auth(self) -> Self:
         if self.host not in ("0.0.0.0", "::"):
+            return self
+        if self.demo:
+            # Demo mode intentionally serves unauthenticated chat; the bootstrap
+            # mints anonymous short-lived tokens and the toolset is locked down.
             return self
         if self.token.strip() or self.token_issue_secret.strip():
             return self
@@ -519,6 +586,26 @@ class WebSocketChannel(BaseChannel):
         self._server_task = asyncio.create_task(runner())
         await self._server_task
 
+    def _new_demo_limiter(self) -> _DemoLimiter | None:
+        """Build a per-connection demo limiter, or None when not in demo mode."""
+        if not self.config.demo:
+            return None
+        return _DemoLimiter(
+            _demo_env_int(
+                "DEMO_RATE_LIMIT_PER_MINUTE", _DEMO_RATE_LIMIT_PER_MINUTE_DEFAULT
+            ),
+            _demo_env_int(
+                "DEMO_MAX_MESSAGES_PER_SESSION", _DEMO_MAX_MESSAGES_PER_SESSION_DEFAULT
+            ),
+        )
+
+    async def _send_demo_limit_reply(self, connection: Any, chat_id: str) -> None:
+        """Deliver the friendly demo-limit assistant message and end the turn."""
+        await self._send_event(
+            connection, "message", chat_id=chat_id, text=_DEMO_LIMIT_MESSAGE
+        )
+        await self._send_event(connection, "turn_end", chat_id=chat_id, latency_ms=0)
+
     async def _connection_loop(self, connection: Any) -> None:
         request = connection.request
         path_part = request.path if request else "/"
@@ -532,6 +619,7 @@ class WebSocketChannel(BaseChannel):
             client_id = client_id[:128]
 
         default_chat_id = str(uuid.uuid4())
+        limiter = self._new_demo_limiter()
 
         try:
             await connection.send(
@@ -559,11 +647,23 @@ class WebSocketChannel(BaseChannel):
 
                 envelope = _parse_envelope(raw)
                 if envelope is not None:
+                    if (
+                        limiter is not None
+                        and envelope.get("type") == "message"
+                        and not limiter.check()
+                    ):
+                        cid = envelope.get("chat_id")
+                        target = cid if _is_valid_chat_id(cid) else default_chat_id
+                        await self._send_demo_limit_reply(connection, target)
+                        continue
                     await self._dispatch_envelope(connection, client_id, envelope)
                     continue
 
                 content = _parse_inbound_payload(raw)
                 if content is None:
+                    continue
+                if limiter is not None and not limiter.check():
+                    await self._send_demo_limit_reply(connection, default_chat_id)
                     continue
                 # WebSocket already authenticates at handshake time (token),
                 # so pairing is not applicable. Treat as non-DM to avoid

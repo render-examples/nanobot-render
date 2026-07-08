@@ -192,6 +192,40 @@ def test_spawn_tool_create():
     assert isinstance(tool, SpawnTool)
 
 
+def test_spawn_tool_enabled_gated_by_config_and_manager():
+    from nanobot.agent.tools.spawn import SpawnTool
+    from nanobot.config.schema import ToolsConfig
+
+    # Enabled: flag on (default) + manager present.
+    ctx = ToolContext(
+        config=ToolsConfig(),
+        workspace="/tmp",
+        subagent_manager=MagicMock(),
+    )
+    assert SpawnTool.enabled(ctx) is True
+
+    # Disabled by config flag even when a manager exists.
+    ctx_off = ToolContext(
+        config=ToolsConfig.model_validate({"subagent": {"enable": False}}),
+        workspace="/tmp",
+        subagent_manager=MagicMock(),
+    )
+    assert SpawnTool.enabled(ctx_off) is False
+
+    # Disabled when no manager is wired, regardless of the flag.
+    ctx_no_mgr = ToolContext(
+        config=ToolsConfig(),
+        workspace="/tmp",
+        subagent_manager=None,
+    )
+    assert SpawnTool.enabled(ctx_no_mgr) is False
+
+
+def test_subagent_config_default_enable_true():
+    from nanobot.config.schema import ToolsConfig
+    assert ToolsConfig().subagent.enable is True
+
+
 def test_cron_tool_enabled_without_service():
     from nanobot.agent.tools.cron import CronTool
     mock_config = MagicMock()
@@ -398,3 +432,46 @@ def test_loader_registers_same_tools_as_old_hardcoded():
     }
     actual = set(registered)
     assert expected <= actual, f"Missing tools: {expected - actual}"
+
+
+# --- DEMO config lockdown (security hard requirement) ---
+
+
+def test_demo_config_registers_no_sensitive_tools(tmp_path, monkeypatch):
+    """The shipped render-demo-config.json must not register exec/file/subagent/
+    MCP (or cron/self/image-gen) tools — only chat + web. This proves the demo
+    agent cannot reach shell, filesystem, or spawn/MCP surfaces."""
+    from nanobot.agent.tools.registry import ToolRegistry
+    from nanobot.config.loader import load_config
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    demo_config_path = Path(__file__).resolve().parents[2] / "render-demo-config.json"
+    config = load_config(demo_config_path)
+
+    # Pass a subagent_manager to prove the *config flag* (not a missing manager)
+    # disables spawn. cron_service is None to match the demo gateway wiring.
+    ctx = ToolContext(
+        config=config.tools,
+        workspace=str(tmp_path),
+        bus=MagicMock(),
+        subagent_manager=MagicMock(),
+        cron_service=None,
+        timezone="UTC",
+    )
+    registry = ToolRegistry()
+    registered = set(ToolLoader().load(ctx, registry))
+
+    # Sensitive surfaces are absent.
+    forbidden = {
+        "exec", "write_stdin", "list_exec_sessions",
+        "read_file", "write_file", "edit_file", "list_dir", "find_files", "grep",
+        "spawn", "cron", "my",
+    }
+    assert not (forbidden & registered), (
+        f"demo config unexpectedly registered: {forbidden & registered}"
+    )
+    # No MCP tools (mcp_servers is empty).
+    assert not any(name.startswith("mcp_") for name in registered)
+    # Chat + web remain available.
+    assert "web_search" in registered
+    assert "web_fetch" in registered

@@ -54,6 +54,47 @@ A deployed nanobot is a capable agent: anyone who gets past `NANOBOT_WEB_TOKEN` 
 - This template ships hardened defaults (`restrictToWorkspace`, self-modification writes off) and runs as a non-root user in an isolated container — but the token is still your primary defense.
 - Rotate the token (and your API key) if you suspect it leaked.
 
+## DEMO mode
+
+DEMO mode lets you host a **public, no-auth demo** of nanobot that anyone can chat with immediately — no `NANOBOT_WEB_TOKEN` prompt. It's what powers the hosted demo of this template.
+
+**Forks default to full auth.** `DEMO` is `false`/unset unless you deliberately turn it on, so forking this template gives you the normal token-gated agent. Only set `DEMO=true` if you actually want an open, locked-down demo.
+
+**How it works.** When `DEMO=true`, [`entrypoint.sh`](./entrypoint.sh) starts the gateway with [`render-demo-config.json`](./render-demo-config.json) instead of `render-config.json`. That config is locked down and the WebSocket channel runs in `demo` mode: the WebUI bootstrap skips the auth gate and mints short-lived anonymous tokens.
+
+**Session isolation.** Because demo mode is unauthenticated, the anonymous token identifies no one — so the server treats it as **no** identity for session access. Each connection gets its own fresh chat (`websocket:{uuid}`, an unguessable id), and the session-browsing API is closed off: `GET /api/sessions` returns an empty list and every per-session read/delete route (`/messages`, `/webui-thread`, `/file-preview`, `/automations`, `/delete`) returns `403`. Visitors can chat in their own session but cannot list, open, or delete anyone else's — demo history is ephemeral and per-connection, never browsable.
+
+**The lockdown (what the demo agent can and can't do).** Chat + web search/fetch only. Everything else is off:
+
+| Capability | Demo | Why |
+|---|---|---|
+| Web search / fetch | ✅ on | The one useful tool; SSRF-guarded (see below). |
+| Shell / exec | ❌ off | Would expose env vars incl. your `ANTHROPIC_API_KEY`. |
+| Filesystem (read/write/edit/find) | ❌ off | Would let it read files/config. |
+| Subagents (`spawn`) | ❌ off | New `tools.subagent.enable` flag, off in demo. |
+| Cron / scheduled tasks | ❌ off | The agent is chat-only, no background work. |
+| MCP servers | ❌ off | No external tool servers. |
+| Self-modification (`my`) | ❌ off | No runtime config changes. |
+| Image generation | ❌ off | Cost control. |
+
+The demo also sets `restrictToWorkspace: true`, `webuiAllowLocalServiceAccess: false`, and a cheaper default model (`anthropic/claude-haiku-4-5`) for cost defense-in-depth. The WebUI hides the settings / apps / automations / skills UI and shows a "Demo mode" banner.
+
+**Abuse / cost limits.** Two env vars bound public usage (they apply **only** when `DEMO=true`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DEMO_RATE_LIMIT_PER_MINUTE` | `10` | Max messages per minute, per WebSocket connection. |
+| `DEMO_MAX_MESSAGES_PER_SESSION` | `30` | Max total messages per browser session. |
+
+When a cap trips, the agent replies "Demo limit reached — deploy your own nanobot to keep chatting." and stops the turn.
+
+**Changing or disabling the limits on your fork.** Set the env vars in `render.yaml` (or the Render dashboard → Environment). Raise them for a busier demo, or set either to **`0`** to disable that limit entirely (unlimited). They have no effect unless `DEMO=true`.
+
+**Security caveats.**
+- Web fetch is SSRF-guarded in nanobot core: requests to loopback, link-local (incl. cloud metadata `169.254.169.254`), and RFC1918 private ranges are blocked, and every redirect hop is re-validated (`nanobot/security/network.py`). The demo adds no `ssrf_whitelist`, so nothing is exempted.
+- With shell and filesystem tools off, the agent has no way to read the process environment or on-disk config, so the resolved `ANTHROPIC_API_KEY` (in-memory only) is unreachable.
+- A demo is still a public LLM on your API key. Keep the limits sane, watch spend in the Anthropic console, and prefer the cheaper default model.
+
 ## Configuration & docs
 
 Edit [`render-config.json`](./render-config.json) to change the model, provider, enabled tools, or channels, then redeploy. To use a different provider (OpenAI, etc.), swap the `providers` block and the model, and add the matching key to `render.yaml` as a `sync: false` env var.

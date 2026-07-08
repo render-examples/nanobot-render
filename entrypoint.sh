@@ -5,13 +5,28 @@
 # start is diagnosable in the platform's logs instead of a silent exit.
 echo "[entrypoint] starting as $(id)"
 
+# Pick the gateway config. DEMO=true/1 runs the locked-down, unauthenticated
+# hosted demo (chat-only, rate/session capped); anything else keeps full auth.
+# render.yaml passes only `gateway` as the command, so the entrypoint owns the
+# --config selection here.
+CONFIG="/app/render-config.json"
+case "$DEMO" in
+    true|TRUE|True|1)
+        CONFIG="/app/render-demo-config.json"
+        echo "[entrypoint] DEMO mode enabled — using $CONFIG"
+        ;;
+    *)
+        echo "[entrypoint] normal mode — using $CONFIG"
+        ;;
+esac
+
 dir="$HOME/.nanobot"
 mkdir -p "$dir" || echo "[entrypoint] warning: mkdir $dir failed"
 
 if [ "$(id -u)" != "0" ]; then
     # Already non-root (platform forced a user). Can't chown; just run.
     echo "[entrypoint] not root — running app as $(id -un)"
-    exec nanobot "$@"
+    exec nanobot "$@" --config "$CONFIG"
 fi
 
 # Running as root: make the mounted disk writable by the app user.
@@ -22,8 +37,8 @@ chown -R nanobot:nanobot "$dir" || echo "[entrypoint] warning: chown $dir failed
 # still write the root-owned disk.
 if setpriv --reuid=nanobot --regid=nanobot --init-groups true 2>/dev/null; then
     echo "[entrypoint] dropping privileges to nanobot via setpriv"
-    exec setpriv --reuid=nanobot --regid=nanobot --init-groups nanobot "$@"
+    exec setpriv --reuid=nanobot --regid=nanobot --init-groups nanobot "$@" --config "$CONFIG"
 fi
 
 echo "[entrypoint] setpriv privilege-drop not permitted — running app as root"
-exec nanobot "$@"
+exec nanobot "$@" --config "$CONFIG"

@@ -8,10 +8,17 @@ from typing import TYPE_CHECKING, Any
 from nanobot.agent.tools.base import Tool, tool_parameters
 from nanobot.agent.tools.context import ContextAware, RequestContext
 from nanobot.agent.tools.schema import NumberSchema, StringSchema, tool_parameters_schema
+from nanobot.config_base import Base
 from nanobot.security.workspace_access import current_workspace_scope
 
 if TYPE_CHECKING:
     from nanobot.agent.subagent import SubagentManager
+
+
+class SubagentToolConfig(Base):
+    """Subagent (spawn) tool configuration."""
+
+    enable: bool = True  # allow spawning background subagents
 
 
 @tool_parameters(
@@ -33,6 +40,12 @@ if TYPE_CHECKING:
 class SpawnTool(Tool, ContextAware):
     """Tool to spawn a subagent for background task execution."""
 
+    config_key = "subagent"
+
+    @classmethod
+    def config_cls(cls):
+        return SubagentToolConfig
+
     def __init__(self, manager: "SubagentManager"):
         self._manager = manager
         self._origin_channel: ContextVar[str] = ContextVar("spawn_origin_channel", default="cli")
@@ -42,6 +55,10 @@ class SpawnTool(Tool, ContextAware):
             "spawn_origin_message_id",
             default=None,
         )
+
+    @classmethod
+    def enabled(cls, ctx: Any) -> bool:
+        return bool(ctx.config.subagent.enable) and ctx.subagent_manager is not None
 
     @classmethod
     def create(cls, ctx: Any) -> Tool:

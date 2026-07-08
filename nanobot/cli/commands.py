@@ -867,6 +867,19 @@ def _provider_setup_error(config: Config) -> str | None:
     return None
 
 
+def _websocket_demo_enabled(config: Config) -> bool:
+    """True when the WebSocket channel is configured for unauthenticated demo mode."""
+    from nanobot.channels.websocket import WebSocketConfig
+
+    current = getattr(config.channels, "websocket", None)
+    if not current:
+        return False
+    try:
+        return bool(WebSocketConfig.model_validate(current).demo)
+    except Exception:
+        return False
+
+
 def _webui_config_dict(config: Config) -> dict[str, Any]:
     """Return the current WebSocket config as a mutable alias-key dictionary."""
     from nanobot.channels.websocket import WebSocketConfig
@@ -1315,13 +1328,20 @@ def _run_gateway(
     cron = CronService(cron_store_path)
     trigger_store = LocalTriggerStore(config.workspace_path)
 
+    # Demo mode is chat-only: withhold cron_service from the agent so the cron
+    # tool never registers (CronTool.enabled checks ctx.cron_service is not None).
+    # The service itself keeps running for existing machinery; a fresh demo
+    # workspace has no jobs and the agent has no tool to create any.
+    ws_demo = _websocket_demo_enabled(config)
+    agent_cron_service = None if ws_demo else cron
+
     # Create agent with cron service
     agent = AgentLoop.from_config(
         config, bus,
         provider=provider_snapshot.provider,
         model=provider_snapshot.model,
         context_window_tokens=provider_snapshot.context_window_tokens,
-        cron_service=cron,
+        cron_service=agent_cron_service,
         session_manager=session_manager,
         image_generation_provider_configs=image_gen_provider_configs(config),
         provider_snapshot_loader=load_provider_snapshot,

@@ -10,9 +10,11 @@ services:
     dockerContext: .
     # Render's Docker Command REPLACES the Dockerfile ENTRYPOINT (it is not
     # appended to it), so invoke the entrypoint explicitly. The entrypoint
-    # prepares the mounted disk, drops to the non-root user when permitted, then
-    # execs `nanobot gateway --config /app/render-config.json`.
-    dockerCommand: /usr/local/bin/entrypoint.sh gateway --config /app/render-config.json
+    # prepares the mounted disk, drops to the non-root user when permitted, and
+    # picks the config: `--config /app/render-config.json` normally, or
+    # `--config /app/render-demo-config.json` when DEMO is true. It appends the
+    # --config flag itself, so pass only `gateway` here.
+    dockerCommand: /usr/local/bin/entrypoint.sh gateway
     plan: starter
     healthCheckPath: /
     envVars:
@@ -28,6 +30,20 @@ services:
       # in render-config.json.
       - key: PORT
         value: 8765
+      # DEMO mode (optional, default off). Set to "true" to run the hosted,
+      # unauthenticated, locked-down demo (chat-only: no shell/file/subagent/
+      # MCP/cron/image-gen; web search/fetch stays on). Forks should leave this
+      # false/unset to keep full auth via NANOBOT_WEB_TOKEN. Not a secret.
+      - key: DEMO
+        value: "false"
+      # Demo abuse controls (only apply when DEMO=true). Plain, non-secret
+      # values. Set to 0 to disable a limit. See README → "DEMO mode".
+      # Messages per minute, per WebSocket connection.
+      - key: DEMO_RATE_LIMIT_PER_MINUTE
+        value: 10
+      # Total messages per browser session (each browser gets its own session).
+      - key: DEMO_MAX_MESSAGES_PER_SESSION
+        value: 30
     # Persist sessions / memory across deploys. Config lives in /app (code dir),
     # so this mount does not shadow it.
     disk:

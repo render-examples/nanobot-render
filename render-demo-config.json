@@ -1,0 +1,38 @@
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-haiku-4-5",
+      "provider": "auto"
+    }
+  },
+  "providers": {
+    "anthropic": {
+      "apiKey": "${ANTHROPIC_API_KEY}"
+    }
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790
+  },
+  "channels": {
+    "websocket": {
+      "enabled": true,
+      "host": "0.0.0.0",
+      "port": 8765,
+      "demo": true,
+      "websocketRequiresToken": true
+    }
+  },
+  "tools": {
+    "restrictToWorkspace": true,
+    "webuiAllowRemotePackageInstall": false,
+    "webuiAllowLocalServiceAccess": false,
+    "web": { "enable": true },
+    "exec": { "enable": false },
+    "file": { "enable": false },
+    "my": { "enable": false, "allowSet": false },
+    "image_generation": { "enabled": false },
+    "subagent": { "enable": false },
+    "mcp_servers": {}
+  }
+}
