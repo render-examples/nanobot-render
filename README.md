@@ -4,6 +4,8 @@ Deploy [nanobot](https://github.com/HKUDS/nanobot) — a lightweight, self-hosta
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Ho1yShif/nanobot)
 
+https://github.com/user-attachments/assets/db936382-2bfa-49cf-a103-ed787b53127e
+
 ## What you get
 
 One Render web service running nanobot's `gateway` and its bundled WebUI. You chat with the agent from your browser; it can use tools (web search/fetch, filesystem, shell, MCP servers) and remembers past sessions on a persistent disk. Access is gated by a secret you set.
