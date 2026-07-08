@@ -30,7 +30,8 @@ RUN NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install --system --no-cache ".[whatsapp]"
 # Render deploy template: committed gateway config that wires secrets through
 # ${ANTHROPIC_API_KEY} / ${NANOBOT_WEB_TOKEN} env vars (resolved at startup).
 # Lives in the code dir (/app), not the data dir, so a mounted disk won't shadow it.
-COPY render-config.json ./
+# render-demo-config.json is the locked-down config the entrypoint selects when DEMO=true.
+COPY render-config.json render-demo-config.json ./
 
 # Create non-root user and config directory
 RUN useradd -m -u 1000 -s /bin/bash nanobot && \
