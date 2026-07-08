@@ -21,6 +21,7 @@ import pytest
 
 from nanobot.channels.websocket import WebSocketChannel, WebSocketConfig
 from nanobot.webui.gateway_services import build_gateway_services
+from nanobot.webui.websocket_logging import OPENING_HANDSHAKE_FAILED_MESSAGE
 
 
 def _free_port() -> int:
@@ -99,7 +100,8 @@ async def test_head_probe_returns_200_and_does_not_log_error(
         # The probe must not produce the websockets "opening handshake failed"
         # ERROR traceback that used to flood the logs.
         assert not any(
-            "opening handshake failed" in record.getMessage() for record in caplog.records
+            OPENING_HANDSHAKE_FAILED_MESSAGE in record.getMessage()
+            for record in caplog.records
         )
     finally:
         await channel.stop()

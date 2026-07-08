@@ -410,9 +410,7 @@ class _WebUIServerConnection(ServerConnection):
             self.transport.write(response)
         with suppress(Exception):
             self.transport.close()
-        self.logger.debug(
-            "answered non-GET HTTP probe (" + method.decode("ascii", "replace") + ")"
-        )
+        self.logger.debug("answered non-GET HTTP probe (%s)", method.decode("ascii", "replace"))
 
     async def handshake(self, *args: Any, **kwargs: Any) -> None:
         try:
