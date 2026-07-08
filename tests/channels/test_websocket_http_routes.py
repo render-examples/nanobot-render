@@ -213,6 +213,39 @@ async def test_bootstrap_returns_token_for_localhost(
 
 
 @pytest.mark.asyncio
+async def test_demo_mode_does_not_expose_other_sessions(
+    bus: MagicMock, tmp_path: Path
+) -> None:
+    # Demo mode mints an API token for every anonymous visitor, so the token is
+    # not an identity. The session store must not leak across visitors: the list
+    # is empty and per-session reads/deletes are refused.
+    sm = _seed_session(tmp_path, key="websocket:abc")
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    channel = _ch(bus, session_manager=sm, port=port, demo=True, host="0.0.0.0")
+    server_task = asyncio.create_task(channel.start())
+    await asyncio.sleep(0.3)
+    try:
+        boot = await _http_get(f"{base}/webui/bootstrap")
+        assert boot.status_code == 200
+        assert boot.json()["demo"] is True
+        auth = {"Authorization": f"Bearer {boot.json()['token']}"}
+
+        listing = await _http_get(f"{base}/api/sessions", headers=auth)
+        assert listing.status_code == 200
+        assert listing.json()["sessions"] == []
+
+        for suffix in ("messages", "webui-thread", "file-preview", "automations"):
+            resp = await _http_get(
+                f"{base}/api/sessions/websocket%3Aabc/{suffix}", headers=auth
+            )
+            assert resp.status_code == 403, suffix
+    finally:
+        await channel.stop()
+        await server_task
+
+
+@pytest.mark.asyncio
 async def test_sessions_routes_require_bearer_token(
     bus: MagicMock, tmp_path: Path
 ) -> None:

@@ -195,6 +195,12 @@ class GatewayHTTPHandler:
     def workspace_controls_available(self, connection: Any) -> bool:
         return self._runtime_surface == "native" or _is_localhost(connection)
 
+    @property
+    def _demo(self) -> bool:
+        """Unauthenticated demo mode: the API token identifies no one, so
+        cross-session reads must be refused (see _dispatch_session_routes)."""
+        return bool(getattr(self.config, "demo", False))
+
     # -- Token management ---------------------------------------------------
 
     def check_api_token(self, request: WsRequest) -> bool:
@@ -354,6 +360,12 @@ class GatewayHTTPHandler:
     # -- Session routes -----------------------------------------------------
 
     async def _dispatch_session_routes(self, request: WsRequest, got: str) -> Response | None:
+        if self._demo and re.match(r"^/api/sessions/[^/]+/", got):
+            # Demo visitors share an anonymous token, so per-session reads and
+            # deletes would leak across visitors. Each connection only reaches
+            # its own live chat over the WebSocket; no cross-session HTTP access.
+            return _http_error(403, "not available in demo mode")
+
         m = re.match(r"^/api/sessions/([^/]+)/messages$", got)
         if m:
             return self._handle_session_messages(request, m.group(1))
@@ -379,6 +391,10 @@ class GatewayHTTPHandler:
     async def _handle_sessions_list(self, request: WsRequest) -> Response:
         if not self.check_api_token(request):
             return _http_error(401, "Unauthorized")
+        if self._demo:
+            # No per-visitor identity in demo mode: never expose the global
+            # session store as a browsable list.
+            return _http_json_response({"sessions": []})
         if self.session_manager is None:
             return _http_error(503, "session manager unavailable")
         payload = await asyncio.to_thread(self._sessions_list_payload)

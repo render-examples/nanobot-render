@@ -58,7 +58,9 @@ DEMO mode lets you host a **public, no-auth demo** of nanobot that anyone can ch
 
 **Forks default to full auth.** `DEMO` is `false`/unset unless you deliberately turn it on, so forking this template gives you the normal token-gated agent. Only set `DEMO=true` if you actually want an open, locked-down demo.
 
-**How it works.** When `DEMO=true`, [`entrypoint.sh`](./entrypoint.sh) starts the gateway with [`render-demo-config.json`](./render-demo-config.json) instead of `render-config.json`. That config is locked down and the WebSocket channel runs in `demo` mode: the WebUI bootstrap skips the auth gate and mints short-lived anonymous tokens, and each browser still gets its own **isolated** session (`websocket:{uuid}`), so visitors never see each other's chats.
+**How it works.** When `DEMO=true`, [`entrypoint.sh`](./entrypoint.sh) starts the gateway with [`render-demo-config.json`](./render-demo-config.json) instead of `render-config.json`. That config is locked down and the WebSocket channel runs in `demo` mode: the WebUI bootstrap skips the auth gate and mints short-lived anonymous tokens.
+
+**Session isolation.** Because demo mode is unauthenticated, the anonymous token identifies no one — so the server treats it as **no** identity for session access. Each connection gets its own fresh chat (`websocket:{uuid}`, an unguessable id), and the session-browsing API is closed off: `GET /api/sessions` returns an empty list and every per-session read/delete route (`/messages`, `/webui-thread`, `/file-preview`, `/automations`, `/delete`) returns `403`. Visitors can chat in their own session but cannot list, open, or delete anyone else's — demo history is ephemeral and per-connection, never browsable.
 
 **The lockdown (what the demo agent can and can't do).** Chat + web search/fetch only. Everything else is off:
 
