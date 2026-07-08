@@ -46,11 +46,9 @@ Render prompts for these on deploy (both are `sync: false`, so no secret is ever
 
 `PORT` is set for you in the Blueprint. Configuration lives in [`render-config.json`](./render-config.json); the two secrets are referenced there as `${ANTHROPIC_API_KEY}` and `${NANOBOT_WEB_TOKEN}` and resolved at startup.
 
-## Security note — read this
+## Security note
 
 A deployed nanobot is a capable agent: anyone who gets past `NANOBOT_WEB_TOKEN` can make it run shell commands and use tools **inside its container, with your API key**.
-
-- **Keep `NANOBOT_WEB_TOKEN` secret and strong.** It's the only thing standing between the internet and your agent.
 - This template ships hardened defaults (`restrictToWorkspace`, self-modification writes off) and runs as a non-root user in an isolated container — but the token is still your primary defense.
 - Rotate the token (and your API key) if you suspect it leaked.
 
