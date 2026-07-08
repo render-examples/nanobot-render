@@ -40,6 +40,12 @@ class SubagentToolConfig(Base):
 class SpawnTool(Tool, ContextAware):
     """Tool to spawn a subagent for background task execution."""
 
+    config_key = "subagent"
+
+    @classmethod
+    def config_cls(cls):
+        return SubagentToolConfig
+
     def __init__(self, manager: "SubagentManager"):
         self._manager = manager
         self._origin_channel: ContextVar[str] = ContextVar("spawn_origin_channel", default="cli")

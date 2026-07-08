@@ -199,7 +199,7 @@ class GatewayHTTPHandler:
     def _demo(self) -> bool:
         """Unauthenticated demo mode: the API token identifies no one, so
         cross-session reads must be refused (see _dispatch_session_routes)."""
-        return bool(getattr(self.config, "demo", False))
+        return bool(self.config.demo)
 
     # -- Token management ---------------------------------------------------
 
@@ -311,15 +311,14 @@ class GatewayHTTPHandler:
     # -- Bootstrap ----------------------------------------------------------
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
-        demo = bool(getattr(self.config, "demo", False))
+        demo = self._demo
         secret = self.config.token_issue_secret.strip() or self.config.token.strip()
         # Demo mode skips the secret/localhost gate entirely; anonymous visitors
         # still get a short-lived WS token minted below.
         if not demo:
-            if secret:
-                if not _issue_route_secret_matches(request.headers, secret):
-                    return _http_error(401, "Unauthorized")
-            elif not _is_localhost(connection):
+            if secret and not _issue_route_secret_matches(request.headers, secret):
+                return _http_error(401, "Unauthorized")
+            if not secret and not _is_localhost(connection):
                 return _http_error(403, "bootstrap is localhost-only")
 
         if not self.tokens.can_issue(include_api_token=True):

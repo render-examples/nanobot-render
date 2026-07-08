@@ -76,10 +76,10 @@ _DEMO_LIMIT_MESSAGE = "Demo limit reached — deploy your own nanobot to keep ch
 def _demo_env_int(name: str, default: int) -> int:
     """Read a non-negative int env var; fall back to *default* if unset/invalid."""
     raw = os.environ.get(name)
-    if raw is None or not raw.strip():
+    if raw is None:
         return default
     try:
-        value = int(raw.strip())
+        value = int(raw)  # int() tolerates surrounding whitespace, rejects ""
     except ValueError:
         return default
     return value if value >= 0 else default
@@ -588,7 +588,7 @@ class WebSocketChannel(BaseChannel):
 
     def _new_demo_limiter(self) -> _DemoLimiter | None:
         """Build a per-connection demo limiter, or None when not in demo mode."""
-        if not getattr(self.config, "demo", False):
+        if not self.config.demo:
             return None
         return _DemoLimiter(
             _demo_env_int(
