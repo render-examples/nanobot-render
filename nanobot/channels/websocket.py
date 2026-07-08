@@ -20,6 +20,7 @@ from pydantic import Field, field_validator, model_validator
 from websockets.asyncio.server import ServerConnection, serve, unix_serve
 from websockets.exceptions import ConnectionClosed
 from websockets.http11 import Request as WsRequest
+from websockets.protocol import State
 
 from nanobot.bus.events import OUTBOUND_META_AGENT_UI, OutboundMessage
 from nanobot.bus.outbound_events import (
@@ -338,6 +339,93 @@ def _is_websocket_upgrade(request: WsRequest) -> bool:
     return True
 
 
+# HTTP methods recognized while sniffing the first request line of a connection.
+_KNOWN_HTTP_METHODS = frozenset(
+    {b"GET", b"HEAD", b"POST", b"PUT", b"DELETE", b"OPTIONS", b"PATCH", b"TRACE", b"CONNECT"}
+)
+# Give up sniffing (and let websockets reject the connection itself) if a request
+# line this long arrives without a CRLF.
+_PROBE_SNIFF_MAX_BYTES = 8192
+
+
+class _WebUIServerConnection(ServerConnection):
+    """A ``ServerConnection`` that answers non-GET HTTP probes without erroring.
+
+    The websockets handshake parser only accepts ``GET``. Any other method — e.g.
+    a ``HEAD`` health/uptime probe from a platform load balancer — makes it abort
+    the connection and log the failure at ERROR with a full traceback, and the
+    prober receives a ``502``. On a hosted deploy that probes once per second,
+    this floods the logs.
+
+    We sniff the first request line before the handshake is parsed: ``GET`` is
+    handed to websockets unchanged (WebSocket upgrades and every plain-HTTP WebUI
+    route), ``HEAD`` gets an empty ``200`` so health checks stay green, and any
+    other method gets ``405``. Answered probes are closed quietly, so nothing is
+    logged at ERROR and the client never sees a ``502``.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._probe_buf = b""
+        self._sniffing = True
+        self._probe_answered = False
+
+    def data_received(self, data: bytes) -> None:
+        if not self._sniffing or self.protocol.state is not State.CONNECTING:
+            super().data_received(data)
+            return
+        self._probe_buf += data
+        newline = self._probe_buf.find(b"\r\n")
+        if newline == -1:
+            if len(self._probe_buf) >= _PROBE_SNIFF_MAX_BYTES:
+                self._flush_to_handshake()
+            return
+        method = self._probe_buf[:newline].split(b" ", 1)[0].upper()
+        if method == b"GET" or method not in _KNOWN_HTTP_METHODS:
+            # WebSocket upgrade / WebUI HTTP GET, or something we don't recognize:
+            # hand it to websockets to parse (and reject, if malformed) as usual.
+            self._flush_to_handshake()
+            return
+        self._answer_probe(method)
+
+    def _flush_to_handshake(self) -> None:
+        buffered, self._probe_buf, self._sniffing = self._probe_buf, b"", False
+        super().data_received(buffered)
+
+    def _answer_probe(self, method: bytes) -> None:
+        self._sniffing = False
+        self._probe_answered = True
+        if method == b"HEAD":
+            response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        else:
+            body = b"Method Not Allowed\n"
+            response = (
+                b"HTTP/1.1 405 Method Not Allowed\r\n"
+                b"Allow: GET\r\n"
+                b"Content-Type: text/plain; charset=utf-8\r\n"
+                b"Content-Length: " + str(len(body)).encode("ascii") + b"\r\n"
+                b"Connection: close\r\n\r\n" + body
+            )
+        with suppress(Exception):
+            self.transport.write(response)
+        with suppress(Exception):
+            self.transport.close()
+        self.logger.debug(
+            "answered non-GET HTTP probe (" + method.decode("ascii", "replace") + ")"
+        )
+
+    async def handshake(self, *args: Any, **kwargs: Any) -> None:
+        try:
+            await super().handshake(*args, **kwargs)
+        except Exception:
+            # After answering a probe we close the socket ourselves; the base
+            # handshake then sees EOF-before-request and raises. That's expected,
+            # not an error, so swallow it and let conn_handler close quietly.
+            if self._probe_answered:
+                return
+            raise
+
+
 class WebSocketChannel(BaseChannel):
     """Run a local WebSocket server; forward text/JSON messages to the message bus."""
 
@@ -551,6 +639,7 @@ class WebSocketChannel(BaseChannel):
                 server = await unix_serve(
                     handler,
                     socket_path,
+                    create_connection=_WebUIServerConnection,
                     process_request=process_request,
                     open_timeout=_WEBUI_HTTP_OPEN_TIMEOUT_S,
                     max_size=self.config.max_message_bytes,
@@ -565,6 +654,7 @@ class WebSocketChannel(BaseChannel):
                     handler,
                     self.config.host,
                     self.config.port,
+                    create_connection=_WebUIServerConnection,
                     process_request=process_request,
                     open_timeout=_WEBUI_HTTP_OPEN_TIMEOUT_S,
                     max_size=self.config.max_message_bytes,
