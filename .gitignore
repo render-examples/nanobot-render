@@ -87,9 +87,8 @@ Desktop.ini
 *~
 nano.*.save
 
-# Environment & secrets (keep examples tracked if needed)
+# Environment & secrets
 .env.*
-!.env.example
 
 # Logs & temp
 *.log
