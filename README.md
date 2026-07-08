@@ -2,7 +2,7 @@
 
 Deploy [nanobot](https://github.com/HKUDS/nanobot) — a lightweight, self-hostable AI agent — on Render in one click. Get your own private agent with a browser chat UI, tools, and persistent memory.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/render-examples/nanobot)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/render-examples/nanobot-render)
 
 https://github.com/user-attachments/assets/db936382-2bfa-49cf-a103-ed787b53127e
 
