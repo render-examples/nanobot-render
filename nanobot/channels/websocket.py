@@ -65,8 +65,9 @@ from nanobot.webui.websocket_logging import websockets_server_logger
 # Plain HTTP WebUI routes also run through websockets.process_request.
 _WEBUI_HTTP_OPEN_TIMEOUT_S = 360.0
 
-# Demo abuse controls. Defaults apply only in demo mode; a value <= 0 (or an
-# unparseable/unset env var falling back below) disables that dimension.
+# Demo abuse controls, applied only in demo mode. Set an env var to 0 to
+# disable that dimension; an unset, negative, or unparseable value falls back
+# to the default below.
 _DEMO_RATE_LIMIT_PER_MINUTE_DEFAULT = 10
 _DEMO_MAX_MESSAGES_PER_SESSION_DEFAULT = 30
 _DEMO_LIMIT_MESSAGE = "Demo limit reached — deploy your own nanobot to keep chatting."

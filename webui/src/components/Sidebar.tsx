@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 
 import { ChatList } from "@/components/ChatList";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
-import { useClient } from "@/providers/ClientProvider";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type {
@@ -21,6 +20,7 @@ import type {
   SidebarViewState,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useClient } from "@/providers/ClientProvider";
 
 interface SidebarProps {
   sessions: ChatSummary[];
@@ -156,32 +156,31 @@ export function Sidebar(props: SidebarProps) {
           onClick={props.onOpenSearch}
           icon={<Search className="h-4 w-4" />}
         />
+        {/* Demo mode is chat-only: hide apps / skills / automations. */}
         {!demo && (
-          <SidebarActionButton
-            collapsed={collapsed}
-            label={t("sidebar.apps")}
-            onClick={props.onOpenApps}
-            active={props.activeUtility === "apps"}
-            icon={<Blocks className="h-4 w-4" />}
-          />
-        )}
-        {!demo && (
-          <SidebarActionButton
-            collapsed={collapsed}
-            label={t("sidebar.skills.title")}
-            onClick={props.onOpenSkills}
-            active={props.activeUtility === "skills"}
-            icon={<Brain className="h-4 w-4" />}
-          />
-        )}
-        {!demo && (
-          <SidebarActionButton
-            collapsed={collapsed}
-            label={t("sidebar.automations", { defaultValue: "Automations" })}
-            onClick={props.onOpenAutomations}
-            active={props.activeUtility === "automations"}
-            icon={<CalendarClock className="h-4 w-4" />}
-          />
+          <>
+            <SidebarActionButton
+              collapsed={collapsed}
+              label={t("sidebar.apps")}
+              onClick={props.onOpenApps}
+              active={props.activeUtility === "apps"}
+              icon={<Blocks className="h-4 w-4" />}
+            />
+            <SidebarActionButton
+              collapsed={collapsed}
+              label={t("sidebar.skills.title")}
+              onClick={props.onOpenSkills}
+              active={props.activeUtility === "skills"}
+              icon={<Brain className="h-4 w-4" />}
+            />
+            <SidebarActionButton
+              collapsed={collapsed}
+              label={t("sidebar.automations", { defaultValue: "Automations" })}
+              onClick={props.onOpenAutomations}
+              active={props.activeUtility === "automations"}
+              icon={<CalendarClock className="h-4 w-4" />}
+            />
+          </>
         )}
         {props.archivedCount ? (
           <SidebarActionButton
