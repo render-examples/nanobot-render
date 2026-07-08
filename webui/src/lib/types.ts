@@ -302,6 +302,8 @@ export interface BootstrapResponse {
   model_name?: string | null;
   runtime_surface?: RuntimeSurface;
   runtime_capabilities?: RuntimeCapabilities;
+  /** Hosted, unauthenticated, locked-down demo mode. Hides settings/dangerous UI. */
+  demo?: boolean;
 }
 
 export type RuntimeSurface = "browser" | "native";

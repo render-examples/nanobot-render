@@ -305,8 +305,13 @@ class GatewayHTTPHandler:
     # -- Bootstrap ----------------------------------------------------------
 
     def _handle_bootstrap(self, connection: Any, request: Any) -> Response:
+        demo = bool(getattr(self.config, "demo", False))
         secret = self.config.token_issue_secret.strip() or self.config.token.strip()
-        if secret:
+        if demo:
+            # Demo mode: skip the secret/localhost gate entirely. Anonymous
+            # visitors still get a short-lived WS token minted below.
+            pass
+        elif secret:
             if not _issue_route_secret_matches(request.headers, secret):
                 return _http_error(401, "Unauthorized")
         elif not _is_localhost(connection):
@@ -331,6 +336,7 @@ class GatewayHTTPHandler:
                 "model_name": _resolve_bootstrap_model_name(self.runtime_model_name),
                 "runtime_surface": self._runtime_surface,
                 "runtime_capabilities": self._capabilities,
+                "demo": demo,
             }
         )
 

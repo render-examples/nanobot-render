@@ -62,6 +62,7 @@ type BootState =
       tokenExpiresAt: number;
       modelName: string | null;
       runtimeSurface: RuntimeSurface;
+      demo: boolean;
     };
 
 const SIDEBAR_STORAGE_KEY = "nanobot-webui.sidebar";
@@ -406,6 +407,7 @@ export default function App() {
             tokenExpiresAt: bootstrapTokenExpiresAt(boot.expires_in),
             modelName: boot.model_name ?? null,
             runtimeSurface,
+            demo: boot.demo === true,
           });
         } catch (e) {
           if (cancelled) return;
@@ -511,9 +513,11 @@ export default function App() {
       client={state.client}
       token={state.token}
       modelName={state.modelName}
+      demo={state.demo}
     >
       <Shell
         runtimeSurface={state.runtimeSurface}
+        demo={state.demo}
         onModelNameChange={handleModelNameChange}
         onLogout={handleLogout}
         onNativeEngineRestart={handleNativeEngineRestart}
@@ -524,11 +528,13 @@ export default function App() {
 
 function Shell({
   runtimeSurface,
+  demo,
   onModelNameChange,
   onLogout,
   onNativeEngineRestart,
 }: {
   runtimeSurface: RuntimeSurface;
+  demo: boolean;
   onModelNameChange: (modelName: string | null) => void;
   onLogout: () => void;
   onNativeEngineRestart: () => Promise<string>;
@@ -1162,6 +1168,14 @@ function Shell({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onNewChat, onOpenSessionSearch]);
 
+  // Demo mode is chat-only: never render settings/apps/automations/skills
+  // views, even via a stale URL hash or deep link.
+  useEffect(() => {
+    if (demo && view !== "chat") {
+      navigate({ view: "chat", activeKey, settingsSection: "overview" });
+    }
+  }, [demo, view, activeKey, navigate]);
+
   const onSelectSearchResult = useCallback(
     (key: string) => {
       setSessionSearchOpen(false);
@@ -1439,6 +1453,16 @@ function Shell({
           showHostChrome && "host-window-shell",
         )}
       >
+        {demo ? (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex justify-center p-2">
+            <span className="pointer-events-auto rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+              {t("app.demoBanner", {
+                defaultValue:
+                  "Demo mode — chat only. Deploy your own nanobot for full features.",
+              })}
+            </span>
+          </div>
+        ) : null}
         {showHostChrome ? (
           <HostChrome
             onToggleSidebar={showMainSidebar ? toggleHostSidebar : undefined}
