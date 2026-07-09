@@ -13,6 +13,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates git bubblewrap openssh-client libmagic1 && \
     rm -rf /var/lib/apt/lists/*
 
+# Node.js + npm at runtime so npm-based CLI Apps (e.g. hyperframes) can install.
+# Reuse the exact toolchain from the webui-builder stage instead of pulling a
+# second copy. Without this, `npm install -g` fails with "npm is not installed".
+COPY --from=webui-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=webui-builder /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
+    node --version && npm --version
+
 WORKDIR /app
 
 # Install Python dependencies first (cached layer). Hatch reads the custom build
@@ -33,9 +42,12 @@ RUN NANOBOT_SKIP_WEBUI_BUILD=1 uv pip install --system --no-cache ".[whatsapp]"
 # render-demo-config.json is the locked-down config the entrypoint selects when DEMO=true.
 COPY render-config.json render-demo-config.json ./
 
-# Create non-root user and config directory
+# Create non-root user and config directory. The npm global prefix lives under
+# the nanobot home (writable by the non-root runtime user) so `npm install -g`
+# from the CLI Apps UI succeeds; its bin dir is added to PATH below so the
+# installed CLIs resolve via shutil.which().
 RUN useradd -m -u 1000 -s /bin/bash nanobot && \
-    mkdir -p /home/nanobot/.nanobot && \
+    mkdir -p /home/nanobot/.nanobot /home/nanobot/.npm-global/bin && \
     chown -R nanobot:nanobot /home/nanobot /app
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -45,6 +57,9 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/ent
 # Render disk, then it drops to the non-root nanobot user via setpriv.
 USER root
 ENV HOME=/home/nanobot
+# Route npm global installs to a user-writable prefix and expose its bin on PATH.
+ENV NPM_CONFIG_PREFIX=/home/nanobot/.npm-global \
+    PATH=/home/nanobot/.npm-global/bin:$PATH
 # Ensure crash output reaches Render logs (app output is otherwise swallowed on
 # non-graceful exit). Baked in so it survives Blueprint syncs.
 ENV PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
