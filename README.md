@@ -35,6 +35,8 @@ This is not a free deploy. Expect:
 5. The WebUI shows an access prompt — paste the same `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
 6. Send a message. You're talking to your agent.
 
+**Note:** If you hit an error like `No space left on device` after performing a resource-intensive dask, upgrade your persistent disk size to 5 GB or larger in the **Disk** page in your Render dashboard.
+
 ## Environment variables
 
 Render prompts for these on deploy (both are `sync: false`, so no secret is ever committed):
