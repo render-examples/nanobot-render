@@ -35,9 +35,7 @@ This is not a free deploy. Expect:
 5. The WebUI shows an access prompt — paste the same `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
 6. Send a message. You're talking to your agent.
 
-**Note:** The Starter plan comfortably runs the core experience — chat, web search/fetch, and persistent memory. Resource-intensive actions, such as installing npm-based CLI Apps or generating/rendering images, can briefly overwhelm the small instance and trigger a ~15s restart before it recovers. To run these reliably, upgrade to a larger plan (e.g. **Standard**, 2 GB) under **Settings → Instance Type** in your Render dashboard.
-
-**Note:** If you hit an error like `No space left on device` after performing a resource-intensive task, upgrade your persistent disk size to 5 GB or larger in the **Disk** page in your Render dashboard.
+**Note:** The Starter plan comfortably runs the core experience — chat, web search/fetch, and persistent memory. Resource-intensive actions, such as installing npm-based CLI Apps or generating/rendering images, can briefly overwhelm the small instance: it may trigger a ~15s restart before recovering, or fail with `No space left on device`. To run these reliably, upgrade to a larger plan (e.g. **Standard**, 2 GB) under **Settings → Instance Type**, and/or increase your persistent disk to 5 GB or larger on the **Disk** page, in your Render dashboard.
 
 ## Environment variables
 
