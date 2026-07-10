@@ -14,7 +14,7 @@ One Render web service running nanobot's `gateway` and its bundled WebUI. You ch
 
 This is not a free deploy. Expect:
 
-- **Render Starter plan** — ~$7/mo for the web service.
+- **Render Starter plan** — ~$7/mo for the web service. Runs the core experience well; resource-intensive tasks (npm-based CLI Apps, image rendering) may need a larger plan — see the note under [Deploy](#deploy).
 - **1 GB persistent disk** — ~$0.25/mo for sessions and memory.
 - **Anthropic API usage** — billed separately by Anthropic based on your agent's LLM calls.
 
@@ -35,7 +35,9 @@ This is not a free deploy. Expect:
 5. The WebUI shows an access prompt — paste the same `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
 6. Send a message. You're talking to your agent.
 
-**Note:** If you hit an error like `No space left on device` after performing a resource-intensive dask, upgrade your persistent disk size to 5 GB or larger in the **Disk** page in your Render dashboard.
+**Note:** The Starter plan comfortably runs the core experience — chat, web search/fetch, and persistent memory. Resource-intensive actions, such as installing npm-based CLI Apps or generating/rendering images, can briefly overwhelm the small instance and trigger a ~15s restart before it recovers. To run these reliably, upgrade to a larger plan (e.g. **Standard**, 2 GB) under **Settings → Instance Type** in your Render dashboard.
+
+**Note:** If you hit an error like `No space left on device` after performing a resource-intensive task, upgrade your persistent disk size to 5 GB or larger in the **Disk** page in your Render dashboard.
 
 ## Environment variables
 

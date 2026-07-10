@@ -451,7 +451,16 @@ def test_install_recovers_stale_npm_global_directory(
         nonlocal install_attempts
         if argv == [npm, "root", "-g"]:
             return subprocess.CompletedProcess(argv, 0, stdout=str(global_root), stderr="")
-        if argv == [npm, "install", "-g", "hyperframes"]:
+        if argv == [
+            npm,
+            "install",
+            "-g",
+            "hyperframes",
+            "--no-audit",
+            "--no-fund",
+            "--maxsockets",
+            "4",
+        ]:
             install_attempts += 1
             if install_attempts == 1:
                 return subprocess.CompletedProcess(
@@ -954,3 +963,67 @@ def test_uninstall_uses_uv_pip_when_pip_unavailable(
         sys.executable,
         "suno-cli",
     ]
+
+
+def test_npm_argv_install_and_update_use_lightweight_flags(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = _manager(tmp_path)
+    npm = str(tmp_path / "bin" / "npm")
+    monkeypatch.setattr(
+        "nanobot.apps.cli.service.shutil.which",
+        lambda command: npm if command == "npm" else None,
+    )
+    app = {"package_manager": "npm", "npm_package": "hyperframes"}
+
+    # install/update carry lightweight flags to flatten the CPU/network burst that
+    # otherwise starves a small instance's health check.
+    assert manager._npm_argv(app, "install") == [
+        npm,
+        "install",
+        "-g",
+        "hyperframes",
+        "--no-audit",
+        "--no-fund",
+        "--maxsockets",
+        "4",
+    ]
+    assert manager._npm_argv(app, "update") == [
+        npm,
+        "install",
+        "-g",
+        "hyperframes@latest",
+        "--no-audit",
+        "--no-fund",
+        "--maxsockets",
+        "4",
+    ]
+    # uninstall stays minimal — install-only flags don't apply.
+    assert manager._npm_argv(app, "uninstall") == [npm, "uninstall", "-g", "hyperframes"]
+
+
+def test_run_argv_timeout_raises_friendly_cli_app_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nanobot.apps.cli import service as cli_service
+
+    manager = _manager(tmp_path)
+
+    def fake_run(
+        argv: list[str],
+        *,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=timeout)
+
+    monkeypatch.setattr(cli_service.subprocess, "run", fake_run)
+
+    with pytest.raises(CliAppError) as excinfo:
+        manager._run_argv(["npm", "install", "-g", "hyperframes"], timeout=5)
+
+    assert excinfo.value.status == 503
+    assert "upgrade" in excinfo.value.message.lower()

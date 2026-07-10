@@ -857,10 +857,15 @@ class CliAppManager:
         package = str(app.get("npm_package") or "")
         if not package:
             raise CliAppError("registry entry has no npm_package")
+        # Lightweight flags flatten npm's CPU/network burst so a global install
+        # doesn't starve a small instance's health check into a restart:
+        # --no-audit/--no-fund skip an extra audit pass; --maxsockets caps
+        # concurrent connections. Uninstall doesn't need them.
+        light = ["--no-audit", "--no-fund", "--maxsockets", "4"]
         if action == "install":
-            return [npm, "install", "-g", package]
+            return [npm, "install", "-g", package, *light]
         if action == "update":
-            return [npm, "install", "-g", package + "@latest"]
+            return [npm, "install", "-g", package + "@latest", *light]
         return [npm, "uninstall", "-g", package]
 
     def _cleanup_stale_npm_install(self, app: dict[str, Any]) -> bool:
@@ -944,12 +949,21 @@ class CliAppManager:
     def _run_argv(self, argv: list[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
         command = subprocess.list2cmdline(argv)
         logger.info("CLI Apps: running {}", command)
-        result = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        try:
+            result = subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            logger.warning("CLI Apps: command timed out after {}s: {}", timeout, command)
+            raise CliAppError(
+                f"Timed out after {timeout}s. CLI-app installs are resource-intensive and "
+                "can overwhelm a small instance. Upgrade your Render instance to a larger "
+                "plan and try again — see the README.",
+                status=503,
+            ) from exc
         logger.info("CLI Apps: command exited with code {}: {}", result.returncode, command)
         output = (result.stderr or result.stdout or "").strip()
         if output:
