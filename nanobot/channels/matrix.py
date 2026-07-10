@@ -18,7 +18,7 @@ from nanobot.security.workspace_policy import is_path_within
 try:
     import aiohttp
     import nh3
-    from mistune import create_markdown
+    from mistune import HTMLRenderer, create_markdown
     from nio import (
         AsyncClient,
         AsyncClientConfig,
@@ -76,8 +76,11 @@ MatrixMediaEvent: TypeAlias = RoomMessageMedia | RoomEncryptedMedia
 class _MediaTooLargeError(Exception):
     """Raised when an inbound Matrix media download exceeds the configured cap."""
 
+# mistune treats any non-http(s) scheme as harmful and rewrites it to
+# "#harmful-link" before nh3 ever runs. Allow the Matrix schemes through here so
+# nh3 (MATRIX_HTML_CLEANER below) remains the single security gate for URLs.
 MATRIX_MARKDOWN = create_markdown(
-    escape=True,
+    renderer=HTMLRenderer(escape=True, allow_harmful_protocols=("mxc:", "matrix:")),
     plugins=["table", "strikethrough", "url", "superscript", "subscript"],
 )
 
