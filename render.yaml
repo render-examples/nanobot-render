@@ -11,9 +11,11 @@ services:
     # Render's Docker Command REPLACES the Dockerfile ENTRYPOINT (it is not
     # appended to it), so invoke the entrypoint explicitly. The entrypoint
     # prepares the mounted disk, drops to the non-root user when permitted, and
-    # picks the config: `--config /app/render-config.json` normally, or
-    # `--config /app/render-demo-config.json` when DEMO is true. It appends the
-    # --config flag itself, so pass only `gateway` here.
+    # copies the selected config template onto the disk
+    # (render-config.json normally, or render-demo-config.json when DEMO is
+    # true) at $HOME/.nanobot/config.json — so the runtime data_dir lands on the
+    # persistent disk. It appends the --config flag itself, so pass only
+    # `gateway` here.
     dockerCommand: /usr/local/bin/entrypoint.sh gateway
     plan: starter
     healthCheckPath: /
@@ -44,8 +46,12 @@ services:
       # Total messages per browser session (each browser gets its own session).
       - key: DEMO_MAX_MESSAGES_PER_SESSION
         value: 30
-    # Persist sessions / memory across deploys. Config lives in /app (code dir),
-    # so this mount does not shadow it.
+    # Persist sessions, memory, and the WebUI display transcripts across deploys.
+    # The entrypoint copies the config onto this mount, so nanobot's runtime
+    # data_dir (config_path.parent) resolves here too — keeping webui/ (chat
+    # history the UI renders), cron, media, and logs durable, not just session
+    # files. Starter / 1 GB is the lean default; history persistence needs this
+    # disk, not a bigger plan.
     disk:
       name: nanobot-data
       mountPath: /home/nanobot/.nanobot

@@ -775,12 +775,17 @@ def append_fork_marker(session_key: str) -> None:
     )
 
 
-def write_session_messages_as_transcript(
-    target_key: str,
+def session_messages_to_transcript_lines(
+    session_key: str,
     messages: list[dict[str, Any]],
-) -> None:
-    """Write a minimal WebUI transcript from already-truncated session messages."""
-    target_chat_id = _chat_id_from_session_key(target_key)
+) -> list[dict[str, Any]]:
+    """Build minimal WebUI transcript rows from persisted session messages.
+
+    The durable session file is the source of truth when the ephemeral display
+    transcript is missing; these rows replay through
+    ``replay_transcript_to_ui_messages`` just like real transcript lines.
+    """
+    target_chat_id = _chat_id_from_session_key(session_key)
     rows: list[dict[str, Any]] = []
     for msg in messages:
         if is_hidden_history_message(msg):
@@ -805,6 +810,15 @@ def write_session_messages_as_transcript(
         else:
             continue
         rows.append(row)
+    return rows
+
+
+def write_session_messages_as_transcript(
+    target_key: str,
+    messages: list[dict[str, Any]],
+) -> None:
+    """Write a minimal WebUI transcript from already-truncated session messages."""
+    rows = session_messages_to_transcript_lines(target_key, messages)
     _write_transcript_lines(target_key, rows)
 
 
@@ -1930,6 +1944,12 @@ def build_webui_thread_response(
         lines, page = _select_transcript_page(session_key, limit=limit, before=before)
     else:
         lines = read_transcript_lines(session_key)
+    if not lines and session_messages:
+        # The display transcript lives on the (historically ephemeral) data dir and
+        # can be wiped by a redeploy even though the durable session file survives.
+        # Reconstruct the thread from the session messages so orphaned chats render
+        # instead of 404ing, and so any future transcript loss self-heals.
+        lines = session_messages_to_transcript_lines(session_key, session_messages)
     if not lines:
         return None
     lines = inject_missing_user_events_from_session(session_key, lines, session_messages)
