@@ -961,7 +961,7 @@ class CliAppManager:
             raise CliAppError(
                 f"Timed out after {timeout}s. CLI-app installs are resource-intensive and "
                 "can overwhelm a small instance. Upgrade your Render instance to a larger "
-                "plan and try again — see the README.",
+                "plan and try again. See the README.",
                 status=503,
             ) from exc
         logger.info("CLI Apps: command exited with code {}: {}", result.returncode, command)
