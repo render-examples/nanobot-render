@@ -607,6 +607,72 @@ def test_replay_uses_stream_end_final_text() -> None:
     assert msgs[1]["content"] == "![Diagram](/api/media/sig/payload)"
 
 
+def test_build_response_reconstructs_thread_from_session_when_transcript_missing(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A wiped display transcript should self-heal from the durable session file."""
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    key = "websocket:orphaned"
+    # No transcript lines were ever written (the ephemeral webui dir was wiped on
+    # redeploy), but the persisted session file still holds the conversation.
+    assert read_transcript_lines(key) == []
+
+    out = build_webui_thread_response(
+        key,
+        session_messages=[
+            {"role": "user", "content": "hello", "timestamp": "2026-06-02T10:00:00"},
+            {"role": "assistant", "content": "hi there"},
+            {"role": "user", "content": "how are you?", "timestamp": "2026-06-02T10:01:00"},
+            {"role": "assistant", "content": "doing well"},
+        ],
+    )
+
+    assert out is not None
+    assert [(m["role"], m["content"]) for m in out["messages"]] == [
+        ("user", "hello"),
+        ("assistant", "hi there"),
+        ("user", "how are you?"),
+        ("assistant", "doing well"),
+    ]
+
+
+def test_build_response_reconstructs_paginated_thread_from_session(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """The live endpoint paginates (limit/direction); the fallback must serve it too."""
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    key = "websocket:orphaned-page"
+
+    out = build_webui_thread_response(
+        key,
+        session_messages=[
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi there"},
+        ],
+        limit=160,
+        direction="latest",
+    )
+
+    assert out is not None
+    assert [(m["role"], m["content"]) for m in out["messages"]] == [
+        ("user", "hello"),
+        ("assistant", "hi there"),
+    ]
+    assert out["page"]["loaded_message_count"] == 2
+    assert out["page"]["has_more_before"] is False
+
+
+def test_build_response_still_none_when_transcript_and_session_both_empty(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
+    assert build_webui_thread_response("websocket:nothing", session_messages=[]) is None
+    assert build_webui_thread_response("websocket:nothing", session_messages=None) is None
+
+
 def test_build_response_backfills_legacy_sse_only_transcripts(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("nanobot.config.paths.get_data_dir", lambda: tmp_path)
     key = "websocket:t-legacy"

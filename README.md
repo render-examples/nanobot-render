@@ -14,7 +14,7 @@ One Render web service running nanobot's `gateway` and its bundled WebUI. You ch
 
 This is not a free deploy. Expect:
 
-- **Render Starter plan** — ~$7/mo for the web service. Runs the core experience well; resource-intensive tasks (npm-based CLI Apps, image rendering) may need a larger plan — see the note under [Deploy](#deploy).
+- **Render Starter plan** — ~$7/mo for the web service. Runs the core experience well; resource-intensive tasks (npm-based CLI Apps, image rendering) may need a larger plan — see [Resource sizing](#resource-sizing) under Deploy.
 - **1 GB persistent disk** — ~$0.25/mo for sessions and memory.
 - **Anthropic API usage** — billed separately by Anthropic based on your agent's LLM calls.
 
@@ -35,7 +35,28 @@ This is not a free deploy. Expect:
 5. The WebUI shows an access prompt — paste the same `NANOBOT_WEB_TOKEN` to sign in. It's stored only in your browser.
 6. Send a message. You're talking to your agent.
 
-**Note:** The Starter plan comfortably runs the core experience — chat, web search/fetch, and persistent memory. Resource-intensive actions, such as installing npm-based CLI Apps or generating/rendering images, can briefly overwhelm the small instance: it may trigger a ~15s restart before recovering, or fail with `No space left on device`. To run these reliably, upgrade to a larger plan (e.g. **Standard**, 2 GB) under **Settings → Instance Type**, and/or increase your persistent disk to 5 GB or larger on the **Disk** page, in your Render dashboard.
+### Resource sizing
+
+The Starter plan comfortably runs the core experience — chat, web search/fetch, and persistent memory. Resource-intensive actions, such as installing npm-based CLI Apps or generating/rendering images, can briefly overwhelm the small instance: it may trigger a ~15s restart before recovering, or fail with `No space left on device`. To run these reliably, upgrade to a larger plan (e.g. **Standard**, 2 GB) under **Settings → Instance Type**, and/or increase your persistent disk to 5 GB or larger on the **Disk** page, in your Render dashboard.
+
+**Chat history persistence needs the disk, not a bigger plan.** Sessions, memory, and the chat transcripts the WebUI renders all live on the persistent disk and survive deploys on the default Starter plan. Upgrading the instance type is only about RAM/CPU for heavy in-process work — it doesn't affect what's retained across deploys.
+
+### Heavy CLI Apps (e.g. video rendering)
+
+Some CLI Apps do work the chat service isn't sized for. Two limits to know:
+
+- **System dependencies aren't bundled.** Installing a CLI App only runs its package-manager install (`npm install -g`, `pip`, etc.) — it does *not* install system binaries like `ffmpeg` or a headless browser (Chrome/Chromium). Apps that need those (for example, browser-based video renderers) won't run on the stock image, because the container runs as a non-root user and can't `apt install` at runtime. Getting them working means baking those packages into the [`Dockerfile`](./Dockerfile) and rebuilding.
+- **In-process rendering is memory-hungry.** A single headless-browser + `ffmpeg` render can need 1–2 GB of RAM and multiple cores — more than Starter (512 MB) and often more than Standard (2 GB). Baking the dependencies in doesn't change this; the render *process* is what consumes the memory, so it will still hit the instance's cap.
+
+Because this is a chat app, the recommended approach is **not** to grow the web service around occasional heavy renders. Instead, **offload the render**: use the app's own hosted/cloud render if it has one (for example, hyperframes' HeyGen cloud render — no local browser or `ffmpeg` needed), which keeps this service small and responsive. Only bake in the system dependencies and size up the plan if you specifically want rendering to happen in-process on this instance.
+
+**Example — set up HeyGen for the hyperframes CLI App.** Some installable apps benefit from wiring up a hosted render backend. To render video with hyperframes without local Chrome/`ffmpeg` or a plan upgrade:
+
+1. Get a HeyGen API key (HeyGen renders are HeyGen-hosted and pay-per-credit).
+2. In the Render dashboard, add a `HEYGEN_API_KEY` environment variable on the service (**Settings → Environment**), then let the service redeploy.
+3. Ask the agent to render via `hyperframes cloud render …`; it picks up the key from the environment.
+
+Don't try `hyperframes auth login` — it's an interactive browser flow that can't complete inside a headless container. Use the `HEYGEN_API_KEY` env var instead. It isn't part of the base Blueprint, so add it only if you install hyperframes; the default deploy keeps just `ANTHROPIC_API_KEY` and `NANOBOT_WEB_TOKEN`.
 
 ## Environment variables
 
